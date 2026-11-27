@@ -14,6 +14,7 @@ Read this before changing anything. These rules keep the app from breaking and k
 - Use the global `PageProps<"/route">` and `LayoutProps<"/route">` types. No imports needed.
 - Add `"use client"` only to components that need state, effects or browser APIs. Pages stay server components.
 - Never put secrets in client code or in `NEXT_PUBLIC_` variables.
+- No `any`, written or inferred, and no `!` non-null assertions; ESLint fails on both. Narrow with checks (`instanceof`, `typeof`, `in`) or parse with Zod. Use `as` only when TypeScript cannot know better, never to silence an error.
 
 ## 3. Business rules (from the PRD — do not change silently)
 - All money maths lives in `src/lib/pricing.ts`. Never calculate prices inside components.
