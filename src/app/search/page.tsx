@@ -1,0 +1,199 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { Suspense, type ReactNode } from "react";
+import { ItemCard } from "@/components/items/item-card";
+import { SearchForm } from "@/components/search/search-form";
+import { cn } from "@/lib/cn";
+import { formatShortDate } from "@/lib/format";
+import { categories, searchItems, type SearchFilters } from "@/lib/mock-data";
+import { rentalDays } from "@/lib/pricing";
+
+export const metadata: Metadata = { title: "Search" };
+
+type Params = Record<string, string | string[] | undefined>;
+
+const sorts = [
+  { value: "recommended", label: "Recommended" },
+  { value: "price", label: "Lowest price" },
+  { value: "distance", label: "Nearest" },
+  { value: "rating", label: "Top rated" },
+] as const;
+
+const priceCaps = [500, 800, 1200];
+
+function one(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+/** Builds /search?… keeping current params, with `changes` applied (undefined removes a key). */
+function hrefWith(current: Params, changes: Record<string, string | undefined>) {
+  const next = new URLSearchParams();
+  for (const [key, value] of Object.entries(current)) {
+    const v = one(value);
+    if (v) next.set(key, v);
+  }
+  for (const [key, value] of Object.entries(changes)) {
+    if (value === undefined) next.delete(key);
+    else next.set(key, value);
+  }
+  const qs = next.toString();
+  return qs ? `/search?${qs}` : "/search";
+}
+
+function Chip({ href, active, children }: { href: string; active: boolean; children: ReactNode }) {
+  return (
+    <Link
+      href={href}
+      scroll={false}
+      aria-pressed={active}
+      className={cn(
+        "inline-flex h-9 shrink-0 items-center rounded-full border px-3.5 text-sm font-medium transition-colors",
+        active
+          ? "border-ink bg-ink text-paper"
+          : "border-rule text-ink hover:border-ink",
+      )}
+    >
+      {children}
+    </Link>
+  );
+}
+
+async function Results({ searchParams }: { searchParams: Promise<Params> }) {
+  const params = await searchParams;
+  const q = one(params.q);
+  const category = one(params.category);
+  const delivery = one(params.delivery) === "1";
+  const maxPrice = Number(one(params.max)) || undefined;
+  const sort = (sorts.find((s) => s.value === one(params.sort))?.value ?? "recommended") as SearchFilters["sort"];
+
+  // Dates only count when both are present and the range is valid; otherwise they are ignored.
+  const rawFrom = one(params.from);
+  const rawTo = one(params.to);
+  const dates = rawFrom && rawTo && rentalDays(rawFrom, rawTo) ? { from: rawFrom, to: rawTo } : undefined;
+  const badDates = Boolean(rawFrom && rawTo && !dates);
+
+  const results = searchItems({ q, category, delivery, maxPrice, sort, ...dates });
+  const bookedCount = dates ? searchItems({ q, category, delivery, maxPrice }).length - results.length : 0;
+
+  return (
+    <>
+      <SearchForm defaultQuery={q} defaultFrom={rawFrom} defaultTo={rawTo} />
+
+      {badDates && (
+        <p role="alert" className="mt-3 rounded-lg bg-booked-wash px-3 py-2 text-sm text-booked">
+          The return date must be after the pickup date, so these results ignore your dates.
+        </p>
+      )}
+      {dates && (
+        <p className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+          <span className="rounded-full bg-ok-wash px-3 py-1 font-semibold text-ok">
+            Free {formatShortDate(dates.from)} to {formatShortDate(dates.to)}
+          </span>
+          <Link
+            href={hrefWith(params, { from: undefined, to: undefined })}
+            className="font-semibold text-action hover:underline"
+          >
+            Clear dates
+          </Link>
+        </p>
+      )}
+
+      <div className="mt-4 flex gap-2 overflow-x-auto pb-2" aria-label="Category filter">
+        <Chip href={hrefWith(params, { category: undefined })} active={!category}>
+          All
+        </Chip>
+        {categories.map((c) => (
+          <Chip key={c.slug} href={hrefWith(params, { category: c.slug })} active={category === c.slug}>
+            {c.name}
+          </Chip>
+        ))}
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center gap-2" aria-label="More filters">
+        <Chip href={hrefWith(params, { delivery: delivery ? undefined : "1" })} active={delivery}>
+          Delivery available
+        </Chip>
+        {priceCaps.map((cap) => (
+          <Chip
+            key={cap}
+            href={hrefWith(params, { max: maxPrice === cap ? undefined : String(cap) })}
+            active={maxPrice === cap}
+          >
+            Under ₹{cap}/day
+          </Chip>
+        ))}
+      </div>
+
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-ink-soft" aria-live="polite">
+          {results.length} {results.length === 1 ? "item" : "items"} available
+          {q ? ` for “${q}”` : ""}
+          {bookedCount > 0 ? `. ${bookedCount} more ${bookedCount === 1 ? "is" : "are"} booked on your dates.` : ""}
+        </p>
+        <div className="flex flex-wrap gap-1 text-sm" aria-label="Sort">
+          {sorts.map((s) => (
+            <Link
+              key={s.value}
+              href={hrefWith(params, { sort: s.value === "recommended" ? undefined : s.value })}
+              scroll={false}
+              aria-current={sort === s.value ? "true" : undefined}
+              className={cn(
+                "rounded-lg px-2.5 py-1",
+                sort === s.value ? "bg-plate font-semibold text-ink" : "text-ink-soft hover:text-ink",
+              )}
+            >
+              {s.label}
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      {results.length > 0 ? (
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {results.map((item) => (
+            <ItemCard key={item.id} item={item} dates={dates} />
+          ))}
+        </div>
+      ) : (
+        <div className="mt-10 rounded-xl border border-dashed border-rule p-10 text-center">
+          <p className="font-semibold">
+            {bookedCount > 0 && dates
+              ? `Everything that matches is booked from ${formatShortDate(dates.from)} to ${formatShortDate(dates.to)}.`
+              : "No items match."}
+          </p>
+          <p className="mt-1 text-sm text-ink-soft">
+            {bookedCount > 0 ? "Try moving your dates by a day or two." : "Try other words or remove a filter."}
+          </p>
+          <Link href="/search" className="mt-4 inline-block text-sm font-semibold text-action hover:underline">
+            Clear all filters
+          </Link>
+        </div>
+      )}
+    </>
+  );
+}
+
+function ResultsSkeleton() {
+  return (
+    <div aria-busy="true" aria-label="Loading results">
+      <div className="h-12 rounded-xl bg-plate" />
+      <div className="mt-4 h-9 w-2/3 rounded-full bg-plate" />
+      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {Array.from({ length: 4 }, (_, i) => (
+          <div key={i} className="h-72 animate-pulse rounded-xl bg-plate" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default function SearchPage(props: PageProps<"/search">) {
+  return (
+    <div className="mx-auto max-w-6xl px-4 py-6 md:py-10">
+      <h1 className="sr-only">Search results</h1>
+      <Suspense fallback={<ResultsSkeleton />}>
+        <Results searchParams={props.searchParams} />
+      </Suspense>
+    </div>
+  );
+}

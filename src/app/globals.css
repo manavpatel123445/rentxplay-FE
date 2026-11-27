@@ -1,26 +1,95 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/*
+ * GearLoop design tokens.
+ * Motif: the rental tag. Google colours: blue acts, yellow is the tag, red is booked, green is available
+ * or money coming back. The yellow tag stays the one loud thing on a page.
+ */
+@theme {
+  /* Google palette, each colour with one job. */
+  --color-ink: #202124;
+  --color-ink-soft: #5f6368;
+  --color-action: #1a73e8;
+  --color-action-dark: #1765cc;
+  --color-action-wash: #e8f0fe;
+  --color-paper: #f8f9fa;
+  --color-card: #ffffff;
+  --color-rule: #dadce0;
+  --color-tag: #fbbc04;
+  --color-tag-wash: #fef7e0;
+  --color-booked: #d93025;
+  --color-booked-wash: #fce8e6;
+  --color-ok: #188038;
+  --color-ok-wash: #e6f4ea;
+  --color-plate: #f1f3f4;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --font-sans: var(--font-gsans), system-ui, sans-serif;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-optical-sizing: auto;
+}
+
+/* Condensed widths of the variable font, used for display type and prices. */
+.type-condensed {
+  font-stretch: 80%;
+  font-variation-settings: "ROND" 60;
+}
+.type-semi {
+  font-stretch: 87%;
+}
+
+/*
+ * Tag shapes. Cut corners on the edge that carries the hole.
+ * .tag-v: hole at the top (item cards, booking slip). .tag-h: hole on the left (hero).
+ */
+.tag-v {
+  clip-path: polygon(18px 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 0 100%, 0 18px);
+}
+.tag-h {
+  clip-path: polygon(22px 0, 100% 0, 100% 100%, 22px 100%, 0 calc(100% - 22px), 0 22px);
+}
+.tag-hole {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: var(--color-paper);
+  box-shadow: inset 0 0 0 2px var(--color-rule);
+}
+
+/* Perforation between the parts of a tag or slip. */
+.perforated {
+  border-top: 2px dashed var(--color-rule);
+}
+
+/* The hero tag swings once on its string when the page loads. */
+/* Starts and ends level, so the tag rests straight even if the animation never runs. */
+@keyframes tag-swing {
+  0% { transform: rotate(0deg); }
+  20% { transform: rotate(-3deg); }
+  55% { transform: rotate(1.2deg); }
+  80% { transform: rotate(-0.4deg); }
+  100% { transform: rotate(0deg); }
+}
+.tag-swing {
+  transform-origin: 0 50%;
+  animation: tag-swing 1.3s cubic-bezier(0.3, 0.7, 0.3, 1) 0.2s;
+}
+
+/* A 1px outline that follows the cut corners: outer tag in rule colour, inner tag 1px smaller. */
+.tag-outline {
+  padding: 1px;
+  background: var(--color-rule);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tag-swing { animation: none; }
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-action);
+  outline-offset: 2px;
 }
