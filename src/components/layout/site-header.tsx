@@ -1,6 +1,10 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { ButtonLink } from "@/components/ui/button";
+import { getSession } from "@/lib/auth/session";
+import { HideOnAuthPages } from "./hide-on-auth-pages";
 import { NavLinks } from "./nav-links";
+import { UserMenu } from "./user-menu";
 
 /** A small tag on a loop of string: the wordmark's glyph. */
 function TagGlyph() {
@@ -22,13 +26,31 @@ export function SiteHeader() {
           GearLoop
         </Link>
         <NavLinks />
-        {/* On phones the Lend tab in the bottom bar does this job. */}
-        <div className="hidden sm:block">
-          <ButtonLink href="/lend" variant="secondary">
-            Lend your gear
-          </ButtonLink>
-        </div>
+        {/* Reads the session cookie, so it streams in; the rest of the header is static. */}
+        <Suspense fallback={<div aria-hidden className="h-10 w-24 animate-pulse rounded-full bg-plate sm:w-44" />}>
+          <HeaderAccount />
+        </Suspense>
       </div>
     </header>
+  );
+}
+
+async function HeaderAccount() {
+  const user = await getSession();
+  if (user) return <UserMenu name={user.name} email={user.email} />;
+  return (
+    <HideOnAuthPages>
+      <div className="flex items-center gap-1">
+        <Link
+          href="/login"
+          className="inline-flex h-10 items-center rounded-full px-4 text-sm font-semibold text-ink transition-colors hover:bg-plate"
+        >
+          Log in
+        </Link>
+        <ButtonLink href="/signup" className="hidden sm:inline-flex">
+          Sign up
+        </ButtonLink>
+      </div>
+    </HideOnAuthPages>
   );
 }
