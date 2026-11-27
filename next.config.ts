@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { PHASE_DEVELOPMENT_SERVER } from "next/constants";
 
 /**
  * Security headers for every response.
@@ -28,7 +29,15 @@ const securityHeaders = [
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
 ];
 
-const nextConfig: NextConfig = {
+/**
+ * Cloudflare quick tunnels (`cloudflared tunnel --url http://localhost:3000`) for sharing the dev
+ * server. Next.js blocks dev resources (hot reload) and Server Actions (log in, sign up) from any
+ * host but its own, so the tunnel's random *.trycloudflare.com name must be allowed. Development
+ * only: in production the Server Actions origin check stays strict.
+ */
+const DEV_TUNNEL_HOSTS = ["*.trycloudflare.com"];
+
+const baseConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   // Don't advertise the framework in an X-Powered-By header.
@@ -46,4 +55,11 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default function nextConfig(phase: string): NextConfig {
+  if (phase !== PHASE_DEVELOPMENT_SERVER) return baseConfig;
+  return {
+    ...baseConfig,
+    allowedDevOrigins: DEV_TUNNEL_HOSTS,
+    experimental: { serverActions: { allowedOrigins: DEV_TUNNEL_HOSTS } },
+  };
+}
