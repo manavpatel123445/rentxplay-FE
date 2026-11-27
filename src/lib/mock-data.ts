@@ -2,7 +2,7 @@
  * Demo data for the UI until the API exists (PRD data rule: demo data only).
  * Names and listings are fictional.
  */
-import { overlapsUnavailable } from "./pricing";
+import { fitsRentalLength, overlapsUnavailable, rentalDays } from "./pricing";
 import type { Category, CategorySlug, Item } from "./types";
 
 export const CITY = "Ahmedabad";
@@ -216,13 +216,21 @@ export function categoryName(slug: CategorySlug) {
   return categories.find((c) => c.slug === slug)?.name ?? slug;
 }
 
+/** Neighbourhoods that have at least one item, in listing order. */
+export const areas = [...new Set(items.map((item) => item.area))];
+
 export type SearchFilters = {
   q?: string;
   category?: string;
+  /** An Ahmedabad neighbourhood from `areas`. Nearby search by radius comes with the API (FR-12). */
+  area?: string;
   delivery?: boolean;
   maxPrice?: number;
   sort?: "recommended" | "price" | "distance" | "rating";
-  /** ISO dates. When both are set, items booked in that window are left out. */
+  /**
+   * ISO dates. When both are set, items booked in that window, or that can't be rented for that
+   * many days (owner's minimum and maximum), are left out.
+   */
   from?: string;
   to?: string;
 };
@@ -233,9 +241,14 @@ export function searchItems(filters: SearchFilters): Item[] {
   const result = items.filter((item) => {
     if (q && !`${item.title} ${item.description} ${item.category}`.toLowerCase().includes(q)) return false;
     if (filters.category && item.category !== filters.category) return false;
+    if (filters.area && item.area !== filters.area) return false;
     if (filters.delivery && item.deliveryFee === null) return false;
     if (filters.maxPrice && item.prices.oneDay > filters.maxPrice) return false;
-    if (filters.from && filters.to && overlapsUnavailable(item, filters.from, filters.to)) return false;
+    if (filters.from && filters.to) {
+      if (overlapsUnavailable(item, filters.from, filters.to)) return false;
+      const days = rentalDays(filters.from, filters.to);
+      if (days && !fitsRentalLength(item, days)) return false;
+    }
     return true;
   });
   switch (filters.sort) {

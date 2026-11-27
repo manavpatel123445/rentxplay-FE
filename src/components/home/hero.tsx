@@ -6,7 +6,8 @@ import { HeroSearch, type Suggestion } from "@/components/search/hero-search";
 import { CheckIcon } from "@/components/ui/icons";
 import { HeroTag } from "./hero-tag";
 
-const CYCLE_MS = 3200;
+// Long enough to read the tag after its ~1s turn.
+const CYCLE_MS = 4000;
 
 const promises = [
   "Nothing is charged until the owner says yes",
@@ -22,10 +23,14 @@ const promises = [
 export function Hero({
   suggestions,
   categories,
+  areas,
+  city,
   areasLine,
 }: {
   suggestions: Suggestion[];
   categories: { slug: string; name: string }[];
+  areas: { name: string; count: number }[];
+  city: string;
   areasLine: string;
 }) {
   const reduce = useReducedMotion();
@@ -48,7 +53,7 @@ export function Hero({
         <div
           onFocus={() => setSearching(true)}
           onBlur={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setSearching(false);
+            if (!event.currentTarget.contains(event.relatedTarget instanceof Node ? event.relatedTarget : null)) setSearching(false);
           }}
         >
           <h1
@@ -60,7 +65,13 @@ export function Hero({
           <p className="mt-4 max-w-2xl text-lg text-ink-soft">{areasLine}</p>
 
           <div className="mt-8">
-            <HeroSearch suggestions={suggestions} categories={categories} example={featured.title} />
+            <HeroSearch
+              suggestions={suggestions}
+              categories={categories}
+              areas={areas}
+              city={city}
+              example={featured.title}
+            />
           </div>
 
           <ul className="mt-6 grid gap-2 text-sm sm:grid-cols-3 sm:gap-4">

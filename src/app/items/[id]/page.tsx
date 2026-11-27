@@ -4,10 +4,13 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { BookingPanel } from "@/components/items/booking-panel";
 import { ItemImage } from "@/components/items/item-image";
+import { ReportListing } from "@/components/items/report-listing";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
+import { getSession } from "@/lib/auth/session";
+import type { Item } from "@/lib/types";
 import { formatINR } from "@/lib/format";
-import { dayRate } from "@/lib/pricing";
+import { dayRate, fitsRentalLength, lateFeePerDay, rentFor } from "@/lib/pricing";
 import { categoryName, getItem, items } from "@/lib/mock-data";
 
 export function generateStaticParams() {
@@ -47,8 +50,8 @@ async function ItemContent({ params }: { params: Promise<{ id: string }> }) {
 
   // Prices for each rental length, so renters see the saving without doing the maths.
   const lengths = [1, 3, 7]
-    .filter((d) => d >= item.minDays && d <= item.maxDays)
-    .map((days) => ({ days, rate: dayRate(item, days), total: dayRate(item, days) * days }));
+    .filter((d) => fitsRentalLength(item, d))
+    .map((days) => ({ days, rate: dayRate(item, days), total: rentFor(item, days) }));
 
   return (
     <div className="mx-auto max-w-6xl px-4 pt-6 pb-24 md:pt-10 lg:pb-10">
@@ -67,7 +70,7 @@ async function ItemContent({ params }: { params: Promise<{ id: string }> }) {
           <ItemImage item={item} eager className="aspect-[4/3] w-full rounded-xl" />
 
           <div className="mt-6 flex flex-wrap items-center gap-2">
-            {item.popular && <Badge tone="sticker">Popular</Badge>}
+            {item.popular && <Badge tone="popular">Popular</Badge>}
             <Badge>{item.condition}</Badge>
             <Badge>{item.deliveryFee === null ? "Pickup only" : "Delivery available"}</Badge>
           </div>
@@ -148,7 +151,14 @@ async function ItemContent({ params }: { params: Promise<{ id: string }> }) {
             <h2 id="terms" className="text-lg font-bold">
               Before you book
             </h2>
-            <dl className="mt-3 grid gap-4 text-sm sm:grid-cols-3">
+            <dl className="mt-3 grid gap-4 text-sm sm:grid-cols-2">
+              <div>
+                <dt className="font-semibold">Your deposit</dt>
+                <dd className="mt-1 text-ink-soft">
+                  {formatINR(item.deposit)} is held while you have the item, never spent. It comes back within 24 hours of
+                  the owner checking the item, minus any late or damage costs.
+                </dd>
+              </div>
               <div>
                 <dt className="font-semibold">Cancelling</dt>
                 <dd className="mt-1 text-ink-soft">
@@ -158,7 +168,7 @@ async function ItemContent({ params }: { params: Promise<{ id: string }> }) {
               <div>
                 <dt className="font-semibold">Returning late</dt>
                 <dd className="mt-1 text-ink-soft">
-                  Each extra day costs {formatINR(Math.round(item.prices.oneDay * 1.5))}, taken from the deposit.
+                  Each extra day costs {formatINR(lateFeePerDay(item))}, taken from the deposit.
                 </dd>
               </div>
               <div>
@@ -166,6 +176,13 @@ async function ItemContent({ params }: { params: Promise<{ id: string }> }) {
                 <dd className="mt-1 text-ink-soft">
                   Either of you can report it within 48 hours of return, with photos. GearLoop decides how much of the
                   deposit the owner keeps.
+                </dd>
+              </div>
+              <div>
+                <dt className="font-semibold">Paying</dt>
+                <dd className="mt-1 text-ink-soft">
+                  Through Razorpay by UPI or card, and only after {item.owner.name} says yes. GearLoop never sees your card
+                  details. Never pay an owner directly.
                 </dd>
               </div>
             </dl>
@@ -190,18 +207,22 @@ async function ItemContent({ params }: { params: Promise<{ id: string }> }) {
               </ul>
             )}
           </section>
+
+          <div className="mt-6">
+            <ReportListing itemId={item.id} />
+          </div>
         </div>
 
         <aside className="lg:sticky lg:top-24 lg:self-start">
           {/* The panel reads ?from&to from the URL, so it streams in behind its own boundary. */}
           <Suspense fallback={<div className="h-[640px] animate-pulse rounded-xl bg-plate" />}>
-            <BookingPanel item={item} />
+            <ViewerBookingPanel item={item} />
           </Suspense>
         </aside>
       </div>
 
-      {/* Phones: price and a jump to the calendar stay in reach above the tab bar. */}
-      <div className="fixed inset-x-0 bottom-14 z-10 flex items-center justify-between gap-3 border-t border-rule bg-card px-4 py-3 lg:hidden">
+      {/* Phones and tablets: price and a jump to the calendar stay in reach. The tab bar is hidden here (TabBar). */}
+      <div className="fixed inset-x-0 bottom-0 z-20 flex items-center justify-between gap-3 border-t border-rule bg-card px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] lg:hidden">
         <p>
           <span className="type-condensed text-2xl font-extrabold">{formatINR(item.prices.oneDay)}</span>
           <span className="text-sm text-ink-soft"> a day</span>
@@ -210,4 +231,10 @@ async function ItemContent({ params }: { params: Promise<{ id: string }> }) {
       </div>
     </div>
   );
+}
+
+/** Reads the session so the panel knows whether "Request" can go ahead or needs a log in first. */
+async function ViewerBookingPanel({ item }: { item: Item }) {
+  const user = await getSession();
+  return <BookingPanel item={item} loggedIn={Boolean(user)} />;
 }

@@ -1,12 +1,12 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 import { localTodayISO } from "@/lib/dates";
 import { formatINR, formatShortDate } from "@/lib/format";
-import { overlapsUnavailable, quote, rentalDays } from "@/lib/pricing";
+import { fitsRentalLength, overlapsUnavailable, quote, rentalDays } from "@/lib/pricing";
 import type { Handover, Item } from "@/lib/types";
 import { RangeCalendar, type Range } from "./range-calendar";
 
@@ -14,14 +14,19 @@ import { RangeCalendar, type Range } from "./range-calendar";
 function initialRange(item: Item, from: string | null, to: string | null, today: string) {
   const days = from && to ? rentalDays(from, to) : null;
   const ok =
-    from && to && days && from >= today && days >= item.minDays && days <= item.maxDays && !overlapsUnavailable(item, from, to);
+    from && to && days && from >= today && fitsRentalLength(item, days) && !overlapsUnavailable(item, from, to);
   return { range: ok ? { from, to } : { from: null, to: null }, dropped: Boolean(from && to && !ok) };
 }
 
-/** S03 booking panel, shaped as a handover slip: calendar, pickup or delivery, live total. */
-export function BookingPanel({ item }: { item: Item }) {
+/**
+ * S03 booking panel, shaped as a handover slip: calendar, pickup or delivery, live total.
+ * Logged out, the button sends people to log in and back here with their dates and handover kept.
+ */
+export function BookingPanel({ item, loggedIn }: { item: Item; loggedIn: boolean }) {
   const id = useId();
+  const router = useRouter();
   const params = useSearchParams();
+  const [checkoutSoon, setCheckoutSoon] = useState(false);
   const [today, setToday] = useState<string | null>(null);
   const [range, setRange] = useState<Range>({ from: null, to: null });
   const [dropped, setDropped] = useState(false);
@@ -35,11 +40,23 @@ export function BookingPanel({ item }: { item: Item }) {
     setToday(t);
     setRange(init.range);
     setDropped(init.dropped);
+    if (params.get("handover") === "delivery" && item.deliveryFee !== null) setHandover("delivery");
   }, [item, params]);
 
   const days = range.from && range.to ? rentalDays(range.from, range.to) : null;
   const q = days ? quote(item, days, handover) : null;
   const canDeliver = item.deliveryFee !== null;
+
+  function request() {
+    if (!q || !range.from || !range.to) return;
+    if (!loggedIn) {
+      const back = `/items/${item.id}?from=${range.from}&to=${range.to}&handover=${handover}`;
+      router.push(`/login?next=${encodeURIComponent(back)}`);
+      return;
+    }
+    // TODO(S06): go to checkout once it exists.
+    setCheckoutSoon(true);
+  }
 
   return (
     <section id="book" aria-labelledby={`${id}-title`} className="tag-v tag-outline scroll-mt-24">
@@ -64,6 +81,7 @@ export function BookingPanel({ item }: { item: Item }) {
               onChange={(r) => {
                 setRange(r);
                 setDropped(false);
+                setCheckoutSoon(false);
               }}
               unavailable={item.unavailable}
               minDays={item.minDays}
@@ -86,7 +104,10 @@ export function BookingPanel({ item }: { item: Item }) {
                   type="button"
                   disabled={disabled}
                   aria-pressed={selected}
-                  onClick={() => setHandover(option)}
+                  onClick={() => {
+                    setHandover(option);
+                    setCheckoutSoon(false);
+                  }}
                   className={cn(
                     "h-10 rounded-full text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:text-ink-soft/50",
                     selected ? "bg-ink font-semibold text-paper" : "text-ink-soft hover:text-ink",
@@ -127,9 +148,16 @@ export function BookingPanel({ item }: { item: Item }) {
           )}
         </div>
 
-        <Button size="lg" className="mt-4 w-full" disabled={!q}>
-          {q ? `Request ${formatShortDate(range.from!)} to ${formatShortDate(range.to!)}` : "Request booking"}
+        <Button size="lg" className="mt-4 w-full" disabled={!q} onClick={request}>
+          {q && range.from && range.to
+            ? `${loggedIn ? "Request" : "Log in to request"} ${formatShortDate(range.from)} to ${formatShortDate(range.to)}`
+            : "Request booking"}
         </Button>
+        {checkoutSoon && (
+          <p role="status" className="mt-3 rounded-lg bg-action-wash px-3 py-2 text-sm">
+            Booking requests open in the next update. Your dates and total are ready for when they do.
+          </p>
+        )}
         <p className="mt-2 text-center text-xs text-ink-soft">
           Nothing is charged until {item.owner.name} says yes.
         </p>

@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { connection } from "next/server";
 import { Suspense, type ReactNode } from "react";
 import { ItemCard } from "@/components/items/item-card";
-import { SearchForm } from "@/components/search/search-form";
+import { HeroSearch } from "@/components/search/hero-search";
+import { searchOptions } from "@/components/search/search-options";
 import { cn } from "@/lib/cn";
+import { todayInIndiaISO } from "@/lib/dates";
 import { formatShortDate } from "@/lib/format";
-import { categories, searchItems, type SearchFilters } from "@/lib/mock-data";
+import { CITY, areas, categories, searchItems, type SearchFilters } from "@/lib/mock-data";
 import { rentalDays } from "@/lib/pricing";
 
 export const metadata: Metadata = { title: "Search" };
@@ -62,26 +65,56 @@ async function Results({ searchParams }: { searchParams: Promise<Params> }) {
   const params = await searchParams;
   const q = one(params.q);
   const category = one(params.category);
+  // Only known areas count, so a hand-edited URL can't empty the page silently.
+  const area = areas.find((a) => a === one(params.area));
   const delivery = one(params.delivery) === "1";
   const maxPrice = Number(one(params.max)) || undefined;
-  const sort = (sorts.find((s) => s.value === one(params.sort))?.value ?? "recommended") as SearchFilters["sort"];
+  const sort: NonNullable<SearchFilters["sort"]> = sorts.find((s) => s.value === one(params.sort))?.value ?? "recommended";
 
-  // Dates only count when both are present and the range is valid; otherwise they are ignored.
+  // Dates only count when both are present, in order and not in the past; otherwise they are ignored.
   const rawFrom = one(params.from);
   const rawTo = one(params.to);
-  const dates = rawFrom && rawTo && rentalDays(rawFrom, rawTo) ? { from: rawFrom, to: rawTo } : undefined;
-  const badDates = Boolean(rawFrom && rawTo && !dates);
+  // Written as plain checks (not Boolean(...)) so TypeScript knows both dates are strings when inOrder is true.
+  const inOrder = rawFrom !== undefined && rawTo !== undefined && rentalDays(rawFrom, rawTo) !== null;
+  // "Today" must be read per request, never baked into a prerender.
+  if (inOrder) await connection();
+  const pastDates = inOrder && rawFrom < todayInIndiaISO();
+  const dates = inOrder && !pastDates ? { from: rawFrom, to: rawTo } : undefined;
+  const badDates = Boolean(rawFrom && rawTo && !inOrder);
 
-  const results = searchItems({ q, category, delivery, maxPrice, sort, ...dates });
-  const bookedCount = dates ? searchItems({ q, category, delivery, maxPrice }).length - results.length : 0;
+  const { suggestions, areaCounts } = searchOptions();
+  const results = searchItems({ q, category, area, delivery, maxPrice, sort, ...dates });
+  // Items that match everything except the dates: booked then, or not rentable for that many days.
+  const notFreeCount = dates ? searchItems({ q, category, area, delivery, maxPrice }).length - results.length : 0;
 
   return (
     <>
-      <SearchForm defaultQuery={q} defaultFrom={rawFrom} defaultTo={rawTo} />
+      {/* The same bar as the home page. Keyed by what was searched, so "Clear dates" or "Any area" resets it too. */}
+      <HeroSearch
+        key={[q, area, dates?.from, dates?.to].join("|")}
+        suggestions={suggestions}
+        categories={categories}
+        areas={areaCounts}
+        city={CITY}
+        initial={{ query: q, area: area ?? null, dates }}
+      />
 
+      {pastDates && (
+        <p role="alert" className="mt-3 rounded-lg bg-booked-wash px-3 py-2 text-sm text-booked">
+          The pickup date has passed, so these results ignore your dates. Pick today or a later day.
+        </p>
+      )}
       {badDates && (
         <p role="alert" className="mt-3 rounded-lg bg-booked-wash px-3 py-2 text-sm text-booked">
           The return date must be after the pickup date, so these results ignore your dates.
+        </p>
+      )}
+      {area && (
+        <p className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+          <span className="rounded-full bg-action-wash px-3 py-1 font-semibold text-action">In {area}</span>
+          <Link href={hrefWith(params, { area: undefined })} className="font-semibold text-action hover:underline">
+            Any area
+          </Link>
         </p>
       )}
       {dates && (
@@ -128,7 +161,7 @@ async function Results({ searchParams }: { searchParams: Promise<Params> }) {
         <p className="text-sm text-ink-soft" aria-live="polite">
           {results.length} {results.length === 1 ? "item" : "items"} available
           {q ? ` for “${q}”` : ""}
-          {bookedCount > 0 ? `. ${bookedCount} more ${bookedCount === 1 ? "is" : "are"} booked on your dates.` : ""}
+          {notFreeCount > 0 ? `. ${notFreeCount} more ${notFreeCount === 1 ? "isn't" : "aren't"} free for your dates.` : ""}
         </p>
         <div className="flex flex-wrap gap-1 text-sm" aria-label="Sort">
           {sorts.map((s) => (
@@ -157,12 +190,14 @@ async function Results({ searchParams }: { searchParams: Promise<Params> }) {
       ) : (
         <div className="mt-10 rounded-xl border border-dashed border-rule p-10 text-center">
           <p className="font-semibold">
-            {bookedCount > 0 && dates
-              ? `Everything that matches is booked from ${formatShortDate(dates.from)} to ${formatShortDate(dates.to)}.`
+            {notFreeCount > 0 && dates
+              ? `Nothing that matches is free from ${formatShortDate(dates.from)} to ${formatShortDate(dates.to)}.`
               : "No items match."}
           </p>
           <p className="mt-1 text-sm text-ink-soft">
-            {bookedCount > 0 ? "Try moving your dates by a day or two." : "Try other words or remove a filter."}
+            {notFreeCount > 0
+              ? "Try moving your dates, or a longer or shorter rental."
+              : "Try other words or remove a filter."}
           </p>
           <Link href="/search" className="mt-4 inline-block text-sm font-semibold text-action hover:underline">
             Clear all filters
@@ -176,7 +211,7 @@ async function Results({ searchParams }: { searchParams: Promise<Params> }) {
 function ResultsSkeleton() {
   return (
     <div aria-busy="true" aria-label="Loading results">
-      <div className="h-12 rounded-xl bg-plate" />
+      <div className="h-[184px] rounded-[28px] bg-plate sm:h-16 sm:rounded-full" />
       <div className="mt-4 h-9 w-2/3 rounded-full bg-plate" />
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {Array.from({ length: 4 }, (_, i) => (

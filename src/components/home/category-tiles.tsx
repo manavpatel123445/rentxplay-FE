@@ -1,8 +1,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import { RevealGroup, RevealItem } from "@/components/motion/reveal";
+import { formatINR } from "@/lib/format";
 
-export type CategoryTile = { slug: string; name: string; count: number; imageId: string };
+/** `fromRate` is the cheapest per-day rate in the category (from `lowestDayRate`). */
+export type CategoryTile = { slug: string; name: string; fromRate: number; imageId: string };
 
 /** Categories as tiles with a real listing's picture. A swipeable row on phones, a grid from tablet up. */
 export function CategoryTiles({ tiles }: { tiles: CategoryTile[] }) {
@@ -28,9 +30,7 @@ export function CategoryTiles({ tiles }: { tiles: CategoryTile[] }) {
               />
             </span>
             <span className="mt-2 px-1 font-semibold group-hover:underline">{tile.name}</span>
-            <span className="px-1 text-sm text-ink-soft">
-              {tile.count} {tile.count === 1 ? "item" : "items"}
-            </span>
+            <span className="px-1 text-sm text-ink-soft">From {formatINR(tile.fromRate)} a day</span>
           </Link>
         </RevealItem>
       ))}

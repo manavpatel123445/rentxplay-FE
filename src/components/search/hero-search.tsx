@@ -6,10 +6,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { RangeCalendar, type Range } from "@/components/items/range-calendar";
-import { ArrowIcon, CalendarIcon, SearchIcon } from "@/components/ui/icons";
+import { ArrowIcon, CalendarIcon, LocateIcon, PinIcon, SearchIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 import { localTodayISO } from "@/lib/dates";
 import { formatINR, formatShortDate } from "@/lib/format";
+import { useLocationArea, type LocateStatus } from "./use-location-area";
 
 /** What the search box needs to know about an item. Comes from the server (later: GET /items). */
 export type Suggestion = {
@@ -25,8 +26,13 @@ export type Suggestion = {
 type Props = {
   suggestions: Suggestion[];
   categories: { slug: string; name: string }[];
-  /** Item title shown as an example in the empty field. The parent changes it over time. */
-  example: string;
+  /** Neighbourhoods with how many items each has. */
+  areas: { name: string; count: number }[];
+  city: string;
+  /** Item title shown as an example in the empty field. The parent changes it over time. Without one, a plain hint shows. */
+  example?: string;
+  /** What the page already searched for (/search), so the bar opens showing it. Dates only when valid. */
+  initial?: { query?: string; area: string | null; dates?: { from: string; to: string } };
 };
 
 const MAX_RESULTS = 5;
@@ -46,28 +52,32 @@ const list: Variants = { hidden: {}, shown: { transition: { staggerChildren: 0.0
 const row: Variants = { hidden: { opacity: 0, y: 6 }, shown: { opacity: 1, y: 0 } };
 
 /**
- * S01 search, in the shape of a Google search bar: item, dates, search.
- * Focus opens live suggestions; the dates button opens the same calendar as the item page.
+ * S01 search, in the shape of a Google search bar: item, area, dates, search.
+ * Focus opens live suggestions; the area button lists neighbourhoods; the dates button opens
+ * the same calendar as the item page.
  * It is still a GET form to /search, so it works before JavaScript loads.
  */
-export function HeroSearch({ suggestions, categories, example }: Props) {
+export function HeroSearch({ suggestions, categories, areas, city, example, initial }: Props) {
   const id = useId();
   const listId = `${id}-list`;
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const datesButtonRef = useRef<HTMLButtonElement>(null);
-  const [query, setQuery] = useState("");
-  const [panel, setPanel] = useState<"none" | "suggest" | "dates">("none");
+  const areaButtonRef = useRef<HTMLButtonElement>(null);
+  const [query, setQuery] = useState(initial?.query ?? "");
+  const [panel, setPanel] = useState<"none" | "suggest" | "area" | "dates">("none");
+  const areaNames = areas.map((a) => a.name);
+  const { area, nearYou, status: locateStatus, locate, choose } = useLocationArea(areaNames, initial?.area);
   const [active, setActive] = useState(-1);
-  const [range, setRange] = useState<Range>({ from: null, to: null });
+  const [range, setRange] = useState<Range>(initial?.dates ?? { from: null, to: null });
   const [today, setToday] = useState<string | null>(null);
 
   // Close the open panel on a click or tap anywhere outside the form.
   useEffect(() => {
     if (panel === "none") return;
     const onDown = (event: PointerEvent) => {
-      if (!formRef.current?.contains(event.target as Node)) setPanel("none");
+      if (!(event.target instanceof Node && formRef.current?.contains(event.target))) setPanel("none");
     };
     document.addEventListener("pointerdown", onDown);
     return () => document.removeEventListener("pointerdown", onDown);
@@ -83,6 +93,7 @@ export function HeroSearch({ suggestions, categories, example }: Props) {
   const searchHref = (extra: Record<string, string> = {}) => {
     const params = new URLSearchParams(extra);
     if (query.trim()) params.set("q", query.trim());
+    if (area) params.set("area", area);
     if (dates) {
       params.set("from", dates.from);
       params.set("to", dates.to);
@@ -120,6 +131,24 @@ export function HeroSearch({ suggestions, categories, example }: Props) {
     router.push(searchHref());
   }
 
+  function openArea() {
+    setActive(-1);
+    setPanel((p) => (p === "area" ? "none" : "area"));
+  }
+
+  function chooseArea(name: string | null) {
+    choose(name);
+    close();
+    areaButtonRef.current?.focus();
+  }
+
+  function locateMe() {
+    locate(() => {
+      close();
+      areaButtonRef.current?.focus();
+    });
+  }
+
   function openDates() {
     setToday((t) => t ?? localTodayISO());
     setActive(-1);
@@ -143,16 +172,17 @@ export function HeroSearch({ suggestions, categories, example }: Props) {
         if (event.key === "Escape" && panel !== "none") {
           // Focus goes back to the control that opened the panel.
           if (panel === "dates") datesButtonRef.current?.focus();
+          if (panel === "area") areaButtonRef.current?.focus();
           close();
         }
       }}
       onBlur={(event) => {
         // Tabbing out of the form closes the panel; moving inside it does not.
-        if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget as Node)) close();
+        if (event.relatedTarget instanceof Node && !event.currentTarget.contains(event.relatedTarget)) close();
       }}
       className="relative"
     >
-      <div className="flex flex-col gap-1 rounded-[28px] border border-rule bg-card p-2 transition-[border-color,box-shadow] duration-200 focus-within:border-action focus-within:ring-4 focus-within:ring-action/15 sm:flex-row sm:items-center sm:rounded-full sm:pl-5">
+      <div className="flex flex-col gap-1 rounded-[28px] border-2 border-ink bg-card p-2 transition-[border-color,box-shadow] duration-200 focus-within:border-action focus-within:ring-4 focus-within:ring-action/15 sm:flex-row sm:items-center sm:rounded-full sm:pl-5">
         <div
           // A click on the icon or the padding still puts the cursor in the field.
           onMouseDown={(event) => {
@@ -195,25 +225,58 @@ export function HeroSearch({ suggestions, categories, example }: Props) {
                 aria-hidden
                 className="pointer-events-none absolute inset-0 flex items-center overflow-hidden text-lg whitespace-nowrap text-ink-soft"
               >
-                Try&nbsp;
-                <AnimatePresence mode="popLayout" initial={false}>
-                  <motion.span
-                    key={example}
-                    initial={{ y: "110%", opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    exit={{ y: "-110%", opacity: 0 }}
-                    transition={{ type: "spring", stiffness: 380, damping: 32 }}
-                    className="truncate font-semibold text-ink"
-                  >
-                    {example}
-                  </motion.span>
-                </AnimatePresence>
+                {example ? (
+                  <>
+                    Try&nbsp;
+                    <AnimatePresence mode="popLayout" initial={false}>
+                      <motion.span
+                        key={example}
+                        initial={{ y: "110%", opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        exit={{ y: "-110%", opacity: 0 }}
+                        transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                        className="truncate font-semibold text-ink"
+                      >
+                        {example}
+                      </motion.span>
+                    </AnimatePresence>
+                  </>
+                ) : (
+                  "Try PS5, camera, drone…"
+                )}
               </span>
             )}
           </div>
         </div>
 
-        <div className="flex items-center gap-2 border-t border-rule pt-2 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-2">
+        <div className="flex flex-wrap items-center gap-1 border-t border-rule pt-2 sm:flex-nowrap sm:border-t-0 sm:border-l sm:pt-0 sm:pl-2">
+          <button
+            ref={areaButtonRef}
+            type="button"
+            onClick={openArea}
+            aria-expanded={panel === "area"}
+            aria-controls={`${id}-area`}
+            className={cn(
+              "flex h-12 min-w-0 flex-1 items-center gap-2.5 rounded-full px-4 text-left transition-colors hover:bg-plate sm:max-w-40 sm:flex-none",
+              panel === "area" && "bg-plate",
+            )}
+          >
+            <PinIcon className={cn("size-5 shrink-0", area && area === nearYou ? "text-action" : "text-ink-soft")} />
+            <span className="min-w-0 leading-tight">
+              <span className="block text-xs text-ink-soft">{area && area === nearYou ? "Near you" : "Area"}</span>
+              {/* Keyed by area: the new name slides in when it changes, so an automatic pick is noticed. */}
+              <motion.span
+                key={area ?? "anywhere"}
+                // With `initial`, the area comes from the URL or a pick in the list, never automatically: no slide needed.
+                initial={initial ? false : { opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+                className={cn("block truncate text-sm font-semibold", !area && "text-ink-soft")}
+              >
+                {area ?? "Anywhere"}
+              </motion.span>
+            </span>
+          </button>
           <button
             ref={datesButtonRef}
             type="button"
@@ -236,7 +299,7 @@ export function HeroSearch({ suggestions, categories, example }: Props) {
           <motion.button
             type="submit"
             whileTap={{ scale: 0.95 }}
-            className="inline-flex h-12 shrink-0 items-center gap-2 rounded-full bg-action px-6 font-semibold text-white transition-colors hover:bg-action-dark"
+            className="inline-flex h-12 w-full shrink-0 items-center justify-center gap-2 rounded-full bg-action px-6 font-semibold text-white transition-colors hover:bg-action-dark sm:w-auto"
           >
             <SearchIcon className="size-5 sm:hidden" />
             Search
@@ -247,6 +310,7 @@ export function HeroSearch({ suggestions, categories, example }: Props) {
       {/* Sent only when set, so an empty search has a clean URL. */}
       <input type="hidden" name="from" value={dates?.from ?? ""} disabled={!dates} />
       <input type="hidden" name="to" value={dates?.to ?? ""} disabled={!dates} />
+      <input type="hidden" name="area" value={area ?? ""} disabled={!area} />
 
       <AnimatePresence>
         {showSuggest && (
@@ -339,6 +403,74 @@ export function HeroSearch({ suggestions, categories, example }: Props) {
           </motion.div>
         )}
 
+        {panel === "area" && (
+          <motion.div
+            key="area"
+            id={`${id}-area`}
+            role="dialog"
+            aria-label="Choose an area"
+            {...panelMotion}
+            style={{ originY: 0 }}
+            className="absolute inset-x-0 top-full z-30 mt-2 rounded-[28px] border border-rule bg-card p-2 sm:left-auto sm:w-80"
+          >
+            <button
+              type="button"
+              onClick={locateMe}
+              disabled={locateStatus === "locating"}
+              aria-describedby={`${id}-locate-note`}
+              className="flex w-full items-start gap-3 rounded-2xl px-3 py-2.5 text-left text-action hover:bg-action-wash disabled:cursor-wait"
+            >
+              <LocateIcon
+                className={cn("mt-0.5 size-5 shrink-0", locateStatus === "locating" && "animate-pulse motion-reduce:animate-none")}
+              />
+              <span className="min-w-0">
+                <span className="block font-semibold">{locateStatus === "locating" ? "Finding you…" : "Use my location"}</span>
+                <span
+                  id={`${id}-locate-note`}
+                  role={locateStatus === "denied" || locateStatus === "outside" || locateStatus === "unavailable" ? "alert" : undefined}
+                  className={cn(
+                    "block text-xs",
+                    locateStatus === "denied" || locateStatus === "outside" || locateStatus === "unavailable"
+                      ? "text-booked"
+                      : "text-ink-soft",
+                  )}
+                >
+                  {locateNote(locateStatus, nearYou, city)}
+                </span>
+              </span>
+            </button>
+            <p className="mt-1 border-t border-rule px-3 pt-3 pb-1 text-xs font-semibold text-ink-soft">Areas of {city}</p>
+            <motion.ul variants={list} initial="hidden" animate="shown" className="max-h-80 overflow-y-auto">
+              {[{ name: null, count: suggestions.length }, ...areas].map((a) => {
+                const selected = area === a.name;
+                return (
+                  <motion.li key={a.name ?? "any"} variants={row}>
+                    <button
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => chooseArea(a.name)}
+                      className={cn(
+                        "flex w-full items-center justify-between gap-3 rounded-2xl px-3 py-2.5 text-left hover:bg-plate",
+                        selected && "bg-action-wash font-semibold text-action hover:bg-action-wash",
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        {a.name ?? `Anywhere in ${city}`}
+                        {a.name && a.name === nearYou && (
+                          <span className="rounded-full bg-ok-wash px-2 py-0.5 text-xs font-semibold text-ok">Near you</span>
+                        )}
+                      </span>
+                      <span className="shrink-0 text-sm font-normal text-ink-soft">
+                        {a.count} {a.count === 1 ? "item" : "items"}
+                      </span>
+                    </button>
+                  </motion.li>
+                );
+              })}
+            </motion.ul>
+          </motion.div>
+        )}
+
         {panel === "dates" && today && (
           <motion.div
             key="dates"
@@ -387,4 +519,20 @@ function Highlight({ text, query }: { text: string; query: string }) {
       {text.slice(at + query.length)}
     </>
   );
+}
+
+/** One line under "Use my location": what it does, or what went wrong and what to do instead. */
+function locateNote(status: LocateStatus, nearYou: string | null, city: string) {
+  switch (status) {
+    case "found":
+      return nearYou ? `Your nearest area is ${nearYou}.` : "Found you.";
+    case "denied":
+      return "Location is blocked for this site. Allow it in your browser settings, or pick an area below.";
+    case "outside":
+      return `You seem to be outside ${city}. GearLoop is only in ${city} for now, so pick an area below.`;
+    case "unavailable":
+      return "We couldn't find your location. Pick an area below.";
+    default:
+      return "Picks your nearest area. Only the area name is kept on this device.";
+  }
 }

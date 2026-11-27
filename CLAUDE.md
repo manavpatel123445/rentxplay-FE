@@ -28,12 +28,17 @@ Run lint + `tsc` before saying a change is done; run `build` after touching rout
 ## Layout
 
 ```
-src/app/            routes (Home, /search, /items/[id], placeholder tabs)
-src/components/ui/  generic pieces (Button, Badge)
-src/components/<feature>/  feature components (items, search, layout)
-src/lib/            types, mock data, pricing rules, formatting
+src/app/            routes: Home, /search, /items/[id], /account, (auth)/login + /signup,
+                    error.tsx, global-error.tsx, not-found.tsx; /bookings and /lend are still placeholders
+src/components/ui/  generic pieces (Button, Badge, icons)
+src/components/<feature>/  feature components (home, items, search, auth, layout, motion)
+src/lib/            types, mock data, pricing rules, dates, formatting
+src/lib/auth/       validate.ts (pure rules), session.ts (DEMO cookie session), actions.ts (server actions)
 docs/               PRD, flows, HLD, glossary, ADRs
 ```
+
+- **Auth is a demo** until the API exists: `session.ts` keeps who is logged in in an httpOnly cookie, with no user store. Read it only inside `<Suspense>`; set it only in server actions. Keep `getSession()`'s shape when swapping in the API's JWT cookies.
+- Animation uses `motion/react`; `MotionProvider` in the root layout respects reduced motion.
 
 - Server Components by default; add `"use client"` only for state or browser APIs (e.g. `booking-panel.tsx`, `nav-links.tsx`).
 - Import with `@/…`. Join classes with `cn()` from `src/lib/cn.ts`.

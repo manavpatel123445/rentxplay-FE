@@ -1,13 +1,13 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
-type Tone = "plain" | "verified" | "sticker";
+type Tone = "plain" | "verified" | "popular";
 
 const tones: Record<Tone, string> = {
   plain: "border border-rule text-ink-soft",
   verified: "bg-ink text-paper",
-  /* A round kite-yellow sticker, used only for "Popular". */
-  sticker: "bg-tag text-ink -rotate-3",
+  /* "Popular" stays quiet: kite yellow is kept for the one rental tag per page. Solid so it reads on photos. */
+  popular: "border border-rule bg-card text-ink",
 };
 
 export function Badge({

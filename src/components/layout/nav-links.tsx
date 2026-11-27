@@ -3,14 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
-import { isActive, navItems } from "./nav-items";
+import { headerItems, isActive, navItems } from "./nav-items";
 
 /** Desktop header links. The current tab is underlined like a ruled entry. */
 export function NavLinks() {
   const pathname = usePathname();
   return (
     <nav aria-label="Main" className="hidden items-center gap-6 md:flex">
-      {navItems.map((item) => {
+      {headerItems.map((item) => {
         const active = isActive(pathname, item.href);
         return (
           <Link
@@ -30,9 +30,13 @@ export function NavLinks() {
   );
 }
 
-/** Mobile bottom tab bar. */
+/**
+ * Mobile bottom tab bar. It steps aside on an item page, where the booking bar takes the bottom edge,
+ * so deciding to book gets the whole screen.
+ */
 export function TabBar() {
   const pathname = usePathname();
+  if (pathname.startsWith("/items/")) return null;
   return (
     <nav
       aria-label="Main"

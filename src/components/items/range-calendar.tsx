@@ -35,12 +35,13 @@ export function RangeCalendar({ today, value, onChange, unavailable, minDays, ma
   let returnMin = "";
   let returnMax = "";
   if (value.from && choosingReturn) {
-    returnMin = addDays(value.from, minDays);
-    returnMax = addDays(value.from, maxDays);
+    const pickup = value.from;
+    returnMin = addDays(pickup, minDays);
+    returnMax = addDays(pickup, maxDays);
     // The return may fall on the first booked day (the item comes back that morning), not after it.
     const nextBooked = unavailable
       .map((r) => r.from)
-      .filter((f) => f > value.from!)
+      .filter((f) => f > pickup)
       .sort()[0];
     if (nextBooked && nextBooked < returnMax) returnMax = nextBooked;
   }
@@ -131,9 +132,10 @@ export function RangeCalendar({ today, value, onChange, unavailable, minDays, ma
       <p className="mt-3 min-h-5 text-xs text-ink-soft" aria-live="polite">
         {!value.from && "Tap your pickup day."}
         {choosingReturn &&
+          value.from &&
           (returnMin <= returnMax
             ? `Now tap your return day: ${formatShortDate(returnMin)} to ${formatShortDate(returnMax)}.`
-            : `It's booked again too soon after ${formatShortDate(value.from!)}. Pick another pickup day.`)}
+            : `It's booked again too soon after ${formatShortDate(value.from)}. Pick another pickup day.`)}
         {value.from && value.to && (
           <button type="button" className="font-semibold text-action hover:underline" onClick={() => onChange({ from: null, to: null })}>
             Clear dates

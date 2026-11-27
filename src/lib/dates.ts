@@ -16,6 +16,12 @@ export function localTodayISO() {
   return toISO(new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())));
 }
 
+const indiaDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" });
+/** Today's date in India (GearLoop's market), as an ISO string. Safe on the server, whatever its time zone. */
+export function todayInIndiaISO() {
+  return indiaDate.format(new Date());
+}
+
 /** All days of a month grid (Sunday first), with nulls for the leading blanks. */
 export function monthGrid(year: number, month: number): (string | null)[] {
   const first = new Date(Date.UTC(year, month, 1));
