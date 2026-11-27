@@ -48,7 +48,7 @@ The motif is a **rental tag**. Keep it consistent:
 - Colours only from tokens: `ink`, `ink-soft`, `action`, `paper`, `card`, `rule`, `tag` (kite yellow — the one loud element per page), `booked`, `ok`, `plate`. No raw hex in components.
 - Font: Google Sans Flex only (variable `opsz`, `wdth`, `ROND`, set in `src/app/layout.tsx`); `.type-condensed` / `.type-semi` for display type and prices.
 - Shapes: `.tag-v` / `.tag-h` + `.tag-hole`, `.perforated` dividers. Buttons are pill-shaped.
-- Avoid: gradient washes, card drop shadows, "A · B · C" meta strings, all-caps labels, motion beyond the hero tag swing (respect `prefers-reduced-motion`).
+- Avoid: gradient washes, card drop shadows, "A · B · C" meta strings, all-caps labels, decorative motion. Animate with `motion/react` only where it explains something (hero tag swing, search panel, first-time reveals), and respect `prefers-reduced-motion`.
 - Every screen needs visible focus, loading, empty and error states (see the screen-states table in docs/02).
 
 ## Copy

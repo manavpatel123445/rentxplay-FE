@@ -9,7 +9,16 @@ import { ItemImage } from "./item-image";
  * An item as a rental tag: hole at the top, perforated stub with the price.
  * With dates, the stub shows the rent for those dates and the link carries them to the item page.
  */
-export function ItemCard({ item, dates }: { item: Item; dates?: { from: string; to: string } }) {
+export function ItemCard({
+  item,
+  dates,
+  eager,
+}: {
+  item: Item;
+  dates?: { from: string; to: string };
+  /** Load the image straight away: set for cards in the first row. */
+  eager?: boolean;
+}) {
   const days = dates ? rentalDays(dates.from, dates.to) : null;
   const href = days && dates ? `/items/${item.id}?from=${dates.from}&to=${dates.to}` : `/items/${item.id}`;
 
@@ -17,7 +26,7 @@ export function ItemCard({ item, dates }: { item: Item; dates?: { from: string; 
     <Link href={href} className="group tag-v tag-outline relative block hover:bg-ink">
       <article className="tag-v relative flex h-full flex-col bg-card px-3 pt-8 pb-0">
         <span className="tag-hole left-1/2 top-3 -translate-x-1/2" aria-hidden />
-        <ItemImage item={item} className="aspect-[4/3] w-full rounded-md" />
+        <ItemImage item={item} eager={eager} className="aspect-[4/3] w-full rounded-md" />
         <div className="flex flex-1 flex-col px-1 pt-3 pb-3">
           <h3 className="font-semibold leading-snug underline-offset-4 group-hover:underline">{item.title}</h3>
           <p className="mt-1 text-sm text-ink-soft">

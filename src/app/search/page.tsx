@@ -150,8 +150,8 @@ async function Results({ searchParams }: { searchParams: Promise<Params> }) {
 
       {results.length > 0 ? (
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {results.map((item) => (
-            <ItemCard key={item.id} item={item} dates={dates} />
+          {results.map((item, index) => (
+            <ItemCard key={item.id} item={item} dates={dates} eager={index < 4} />
           ))}
         </div>
       ) : (

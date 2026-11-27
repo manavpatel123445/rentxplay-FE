@@ -64,7 +64,7 @@ async function ItemContent({ params }: { params: Promise<{ id: string }> }) {
 
       <div className="mt-4 grid gap-8 lg:grid-cols-[1fr_360px]">
         <div className="min-w-0">
-          <ItemImage item={item} priority className="aspect-[4/3] w-full rounded-xl" />
+          <ItemImage item={item} eager className="aspect-[4/3] w-full rounded-xl" />
 
           <div className="mt-6 flex flex-wrap items-center gap-2">
             {item.popular && <Badge tone="sticker">Popular</Badge>}

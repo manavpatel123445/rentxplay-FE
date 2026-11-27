@@ -46,10 +46,11 @@ body {
  * Tag shapes. Cut corners on the edge that carries the hole.
  * .tag-v: hole at the top (item cards, booking slip). .tag-h: hole on the left (hero).
  */
-.tag-v {
+/* Utilities (not plain classes) so they take variants, e.g. `tag-h lg:tag-v`. */
+@utility tag-v {
   clip-path: polygon(18px 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 0 100%, 0 18px);
 }
-.tag-h {
+@utility tag-h {
   clip-path: polygon(22px 0, 100% 0, 100% 100%, 22px 100%, 0 calc(100% - 22px), 0 22px);
 }
 .tag-hole {
@@ -66,27 +67,12 @@ body {
   border-top: 2px dashed var(--color-rule);
 }
 
-/* The hero tag swings once on its string when the page loads. */
-/* Starts and ends level, so the tag rests straight even if the animation never runs. */
-@keyframes tag-swing {
-  0% { transform: rotate(0deg); }
-  20% { transform: rotate(-3deg); }
-  55% { transform: rotate(1.2deg); }
-  80% { transform: rotate(-0.4deg); }
-  100% { transform: rotate(0deg); }
-}
-.tag-swing {
-  transform-origin: 0 50%;
-  animation: tag-swing 1.3s cubic-bezier(0.3, 0.7, 0.3, 1) 0.2s;
-}
+/* Motion (hero tag swing, search panel, reveals) lives in components via the `motion` library. */
 
 /* A 1px outline that follows the cut corners: outer tag in rule colour, inner tag 1px smaller. */
 .tag-outline {
   padding: 1px;
   background: var(--color-rule);
-}
-@media (prefers-reduced-motion: reduce) {
-  .tag-swing { animation: none; }
 }
 
 :focus-visible {

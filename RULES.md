@@ -37,7 +37,7 @@ Read this before changing anything. These rules keep the app from breaking and k
 - Font: Google Sans Flex via `--font-gsans`. Use `.type-condensed` for prices and big headings.
 - Shapes: `.tag-v` / `.tag-h` with `.tag-hole`, `.tag-outline`, `.perforated`. Reuse them; do not invent new card styles.
 - Avoid: card shadows, gradient washes, ALL-CAPS labels, "A · B · C" meta strings, emoji in UI, one accented word in a headline.
-- Motion: only the hero tag swing. Respect `prefers-reduced-motion`.
+- Motion: use the `motion` library (`motion/react`) for purposeful movement only: the hero tag swing, search panels and placeholder, and one-time reveals on scroll. Short and springy, never looping decoration. `MotionProvider` in the root layout respects `prefers-reduced-motion`; check `useReducedMotion()` for anything it does not cover (timers, clip-path).
 
 ## 6. Quality floor (every change)
 - Works on mobile (375px) and desktop. The bottom tab bar must not cover content.
